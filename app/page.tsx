@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 
 export default function Home() {
   useEffect(() => {
     async function checkConnection() {
+      const supabase = getSupabase();
+
+      if (!supabase) {
+        console.error("Supabase env vars missing");
+        return;
+      }
+
       const { error } = await supabase.auth.getSession();
 
       if (error) {
