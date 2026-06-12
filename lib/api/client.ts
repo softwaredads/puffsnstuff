@@ -19,3 +19,17 @@ export function apiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   }).then((res) => parseJson<T>(res));
 }
+
+export function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  return fetch(apiUrl(path), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((res) => parseJson<T>(res));
+}
+
+export function apiDelete<T>(path: string): Promise<T> {
+  return fetch(apiUrl(path), { method: "DELETE" }).then((res) =>
+    parseJson<T>(res)
+  );
+}
