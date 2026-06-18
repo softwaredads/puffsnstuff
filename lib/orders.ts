@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import type { Order, OrderStatus } from "@/types/orders";
 
 const ORDER_LIST_SELECT = `
@@ -62,7 +62,7 @@ function normalizeOrder(row: Record<string, unknown>): Order {
 }
 
 export async function fetchOrders(limit = 100): Promise<Order[]> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase is not configured");
   const { data, error } = await supabase
     .from("orders")
@@ -75,7 +75,7 @@ export async function fetchOrders(limit = 100): Promise<Order[]> {
 }
 
 export async function fetchOrderById(id: string): Promise<Order> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase is not configured");
   const { data, error } = await supabase
     .from("orders")
@@ -98,7 +98,7 @@ export async function updateOrderStatus(
   id: string,
   status: OrderStatus
 ): Promise<Order> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase is not configured");
 
   const { data: existing, error: fetchError } = await supabase

@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import type { DashboardStats, DailyPoint, PeriodMetric } from "@/types/stats";
 
 const TZ = "Europe/Copenhagen";
@@ -72,7 +72,7 @@ function last7DayKeys(): string[] {
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase is not configured");
 
   const [ordersRes, usersRes, productsRes] = await Promise.all([

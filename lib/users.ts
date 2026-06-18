@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import type { AdminUser } from "@/types/users";
 
 const USER_SELECT = `
@@ -13,7 +13,7 @@ const USER_SELECT = `
 `;
 
 export async function fetchUsers(limit = 200): Promise<AdminUser[]> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase is not configured");
 
   const { data, error } = await supabase
@@ -30,7 +30,7 @@ export async function setUserBlocked(
   userId: string,
   isBlocked: boolean
 ): Promise<AdminUser> {
-  const supabase = getSupabase();
+  const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("Supabase is not configured");
 
   const { error } = await supabase.rpc("set_profile_blocked", {
