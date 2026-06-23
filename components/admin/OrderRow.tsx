@@ -131,7 +131,12 @@ export default function OrderRow({
           #{order.order_number}
         </p>
         <p className="truncate text-sm text-zinc-600">{customerLabel(order)}</p>
-        <p className="truncate text-sm text-zinc-600">{order.pickup_time}</p>
+        <div className="min-w-0">
+          <p className="truncate text-sm text-zinc-600">{order.pickup_time}</p>
+          {order.pickup_location ? (
+            <p className="truncate text-xs text-zinc-400">{order.pickup_location}</p>
+          ) : null}
+        </div>
         <p className="truncate text-sm font-medium text-zinc-900">
           {summary.total.toFixed(0)} kr
         </p>

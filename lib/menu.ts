@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { parseLangParam, resolveName, type AppLang } from "@/lib/i18n/resolveName";
 import type {
   Category,
   DisplayGroup,
@@ -10,12 +11,14 @@ import type {
 const PRODUCT_SELECT = `
   id,
   name,
+  name_da,
+  name_en,
   description,
   image_url,
   base_price,
   is_active,
   created_at,
-  categories ( id, name ),
+  categories ( id, name, name_da, name_en ),
   product_group_templates (
     group_templates (
       id,
@@ -35,21 +38,43 @@ const PRODUCT_SELECT = `
   )
 `;
 
-export async function fetchCategories(): Promise<Category[]> {
+function localizeCategory(category: Category, lang: AppLang): Category {
+  return {
+    ...category,
+    name: resolveName(category, lang),
+  };
+}
+
+function localizeProduct(product: Product, lang: AppLang): Product {
+  return {
+    ...product,
+    name: resolveName(product, lang),
+    categories: product.categories
+      ? {
+          ...product.categories,
+          name: resolveName(product.categories, lang),
+        }
+      : null,
+  };
+}
+
+export async function fetchCategories(lang: AppLang = "da"): Promise<Category[]> {
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase is not configured");
 
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name, is_active, created_at")
+    .select("id, name, name_da, name_en, is_active, created_at")
     .eq("is_active", true)
     .order("name");
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((category) =>
+    localizeCategory(category as Category, lang)
+  );
 }
 
-export async function fetchProducts(): Promise<Product[]> {
+export async function fetchProducts(lang: AppLang = "da"): Promise<Product[]> {
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase is not configured");
 
@@ -59,14 +84,20 @@ export async function fetchProducts(): Promise<Product[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as unknown as Product[];
+  return ((data ?? []) as unknown as Product[]).map((product) =>
+    localizeProduct(product, lang)
+  );
 }
 
 export interface CreateProductInput {
   categoryMode: "existing" | "new";
   categoryId: string;
   categoryName: string;
+  categoryNameDa: string;
+  categoryNameEn: string;
   name: string;
+  nameDa: string;
+  nameEn: string;
   description: string;
   imageUrl: string;
   basePrice: number;
@@ -83,12 +114,17 @@ export async function createProductWithCustomizations(
   let categoryId = input.categoryId;
 
   if (input.categoryMode === "new") {
-    const trimmed = input.categoryName.trim();
-    if (!trimmed) throw new Error("Category name is required");
+    const nameDa = input.categoryNameDa.trim() || input.categoryName.trim();
+    const nameEn = input.categoryNameEn.trim() || input.categoryName.trim();
+    if (!nameDa && !nameEn) throw new Error("Category name is required");
 
     const { data: category, error: categoryError } = await supabase
       .from("categories")
-      .insert({ name: trimmed })
+      .insert({
+        name: nameEn || nameDa,
+        name_da: nameDa || nameEn,
+        name_en: nameEn || nameDa,
+      })
       .select("id")
       .single();
 
@@ -98,11 +134,17 @@ export async function createProductWithCustomizations(
 
   if (!categoryId) throw new Error("Please select or create a category");
 
+  const nameDa = input.nameDa.trim() || input.name.trim();
+  const nameEn = input.nameEn.trim() || input.name.trim();
+  if (!nameDa && !nameEn) throw new Error("Product name is required");
+
   const { data: product, error: productError } = await supabase
     .from("products")
     .insert({
       category_id: categoryId,
-      name: input.name.trim(),
+      name: nameEn || nameDa,
+      name_da: nameDa || nameEn,
+      name_en: nameEn || nameDa,
       description: input.description.trim() || null,
       image_url: input.imageUrl.trim() || null,
       base_price: input.basePrice,

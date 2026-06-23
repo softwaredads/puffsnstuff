@@ -3,6 +3,8 @@ export type SelectionType = "single" | "multi";
 export interface Category {
   id: string;
   name: string;
+  name_da?: string | null;
+  name_en?: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -38,6 +40,8 @@ export interface ProductTemplateLink {
 export interface Product {
   id: string;
   name: string;
+  name_da?: string | null;
+  name_en?: string | null;
   description: string | null;
   image_url: string | null;
   base_price: number;
@@ -83,7 +87,11 @@ export interface ProductDraft {
   categoryMode: "existing" | "new";
   categoryId: string;
   categoryName: string;
+  categoryNameDa: string;
+  categoryNameEn: string;
   name: string;
+  nameDa: string;
+  nameEn: string;
   description: string;
   imageUrl: string;
   basePrice: string;

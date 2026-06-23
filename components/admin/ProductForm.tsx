@@ -12,7 +12,9 @@ import {
   Badge,
 } from "@/components/admin/ui";
 import { apiGet, apiPost } from "@/lib/api/client";
+import { apiUrl } from "@/lib/api/config";
 import { API } from "@/lib/api/endpoints";
+import { useAdminLanguage } from "@/context/AdminLanguageContext";
 import {
   calculateExampleTotalHybrid,
   formatPrice,
@@ -42,7 +44,11 @@ const initialDraft: ProductDraft = {
   categoryMode: "existing",
   categoryId: "",
   categoryName: "",
+  categoryNameDa: "",
+  categoryNameEn: "",
   name: "",
+  nameDa: "",
+  nameEn: "",
   description: "",
   imageUrl: "",
   basePrice: "",
@@ -52,11 +58,13 @@ const initialDraft: ProductDraft = {
 
 export default function ProductForm() {
   const router = useRouter();
+  const { t } = useAdminLanguage();
   const [draft, setDraft] = useState<ProductDraft>(initialDraft);
   const [categories, setCategories] = useState<Category[]>([]);
   const [templates, setTemplates] = useState<GroupTemplate[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -158,26 +166,56 @@ export default function ProductForm() {
     );
   }
 
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(apiUrl("/api/upload"), {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? t.products.uploadFailed);
+
+      updateDraft("imageUrl", json.data.url as string);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.products.uploadFailed);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(false);
 
     const basePrice = Number(draft.basePrice);
-    if (!draft.name.trim()) {
-      setError("Product name is required");
+    if (!draft.nameDa.trim() && !draft.nameEn.trim()) {
+      setError(t.products.productNameRequired);
       return;
     }
     if (!basePrice || basePrice < 0) {
-      setError("Enter a valid base price");
+      setError(t.products.validBasePrice);
       return;
     }
     if (draft.categoryMode === "existing" && !draft.categoryId) {
-      setError("Select a category or create a new one");
+      setError(t.products.selectOrCreateCategory);
       return;
     }
-    if (draft.categoryMode === "new" && !draft.categoryName.trim()) {
-      setError("Enter a category name");
+    if (
+      draft.categoryMode === "new" &&
+      !draft.categoryNameDa.trim() &&
+      !draft.categoryNameEn.trim()
+    ) {
+      setError(t.products.categoryNameRequired);
       return;
     }
 
@@ -186,8 +224,12 @@ export default function ProductForm() {
       await apiPost<Product>(API.products, {
         categoryMode: draft.categoryMode,
         categoryId: draft.categoryId,
-        categoryName: draft.categoryName,
-        name: draft.name,
+        categoryName: draft.categoryNameEn || draft.categoryNameDa,
+        categoryNameDa: draft.categoryNameDa,
+        categoryNameEn: draft.categoryNameEn,
+        name: draft.nameEn || draft.nameDa,
+        nameDa: draft.nameDa,
+        nameEn: draft.nameEn,
         description: draft.description,
         imageUrl: draft.imageUrl,
         basePrice,
@@ -197,7 +239,7 @@ export default function ProductForm() {
       setSuccess(true);
       setTimeout(() => router.push("/products"), 1200);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save product");
+      setError(err instanceof Error ? err.message : t.products.saveFailed);
     } finally {
       setSubmitting(false);
     }
@@ -209,32 +251,30 @@ export default function ProductForm() {
   return (
     <AdminShell>
       <Link href="/products" className={`${btnGhost} mb-4 -ml-3`}>
-        ← Back to products
+        {t.products.backToProducts}
       </Link>
 
       <PageHeader
-        title="Add product"
-        description="Attach shared templates or define product-only customization groups."
+        title={t.products.addTitle}
+        description={t.products.addDescription}
       />
 
       <Card className="mb-6 px-4 py-3 text-sm text-zinc-600">
-        <span className="font-medium text-zinc-800">Two option types:</span>{" "}
-        <Badge variant="accent" className="ml-1">Shared</Badge> reusable across products ·{" "}
-        <Badge variant="warning">Custom</Badge> unique to this item
+        {t.products.optionTypes}
       </Card>
 
       <form onSubmit={handleSubmit} className="mx-auto max-w-3xl space-y-6">
           <section className="rounded-xl border border-zinc-200/80 bg-white shadow-sm">
             <div className="border-b border-zinc-100 px-6 py-5">
               <h2 className="text-base font-semibold text-zinc-900">
-                Product details
+                {t.products.productDetails}
               </h2>
             </div>
             <div className="p-6">
 
             <div className="mb-5">
               <label className="mb-2 block text-sm font-medium text-stone-700">
-                Category
+                {t.products.category}
               </label>
               <div className="mb-3 flex gap-2">
                 {(["existing", "new"] as const).map((mode) => (
@@ -248,7 +288,7 @@ export default function ProductForm() {
                         : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                     }`}
                   >
-                    {mode === "existing" ? "Existing" : "New Category"}
+                    {mode === "existing" ? t.products.existing : t.products.newCategory}
                   </button>
                 ))}
               </div>
@@ -261,7 +301,7 @@ export default function ProductForm() {
                   className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-stone-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 >
                   <option value="">
-                    {loadingMeta ? "Loading..." : "Select category"}
+                    {loadingMeta ? t.products.loading : t.products.selectCategory}
                   </option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
@@ -270,34 +310,68 @@ export default function ProductForm() {
                   ))}
                 </select>
               ) : (
-                <input
-                  type="text"
-                  placeholder="e.g. Churros, Best Sellers"
-                  value={draft.categoryName}
-                  onChange={(e) => updateDraft("categoryName", e.target.value)}
-                  className="w-full rounded-xl border border-stone-200 px-4 py-3 text-stone-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-stone-700">
+                      {t.products.categoryNameEn}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Desserts"
+                      value={draft.categoryNameEn}
+                      onChange={(e) =>
+                        updateDraft("categoryNameEn", e.target.value)
+                      }
+                      className="w-full rounded-xl border border-stone-200 px-4 py-3 text-stone-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-stone-700">
+                      {t.products.categoryNameDa}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="f.eks. Desserter"
+                      value={draft.categoryNameDa}
+                      onChange={(e) =>
+                        updateDraft("categoryNameDa", e.target.value)
+                      }
+                      className="w-full rounded-xl border border-stone-200 px-4 py-3 text-stone-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
+              <div>
                 <label className="mb-2 block text-sm font-medium text-stone-700">
-                  Product Name *
+                  {t.products.productNameEn}
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="Chocolate Churros"
-                  value={draft.name}
-                  onChange={(e) => updateDraft("name", e.target.value)}
+                  value={draft.nameEn}
+                  onChange={(e) => updateDraft("nameEn", e.target.value)}
+                  className="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-stone-700">
+                  {t.products.productNameDa}
+                </label>
+                <input
+                  type="text"
+                  placeholder="Chokolade churros"
+                  value={draft.nameDa}
+                  onChange={(e) => updateDraft("nameDa", e.target.value)}
                   className="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
 
               <div className="sm:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-stone-700">
-                  Description
+                  {t.products.descriptionLabel}
                 </label>
                 <textarea
                   rows={3}
@@ -310,7 +384,7 @@ export default function ProductForm() {
 
               <div>
                 <label className="mb-2 block text-sm font-medium text-stone-700">
-                  Base Price (kr) *
+                  {t.products.basePrice}
                 </label>
                 <input
                   type="number"
@@ -324,16 +398,40 @@ export default function ProductForm() {
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label className="mb-2 block text-sm font-medium text-stone-700">
-                  Image URL
+                  {t.products.productImage}
                 </label>
+                <div className="flex items-center gap-4">
+                  {draft.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.imageUrl}
+                      alt=""
+                      className="h-20 w-20 shrink-0 rounded-xl border border-stone-200 object-cover"
+                    />
+                  )}
+                  <label
+                    className={`${btnSecondary} cursor-pointer ${
+                      uploading ? "pointer-events-none opacity-60" : ""
+                    }`}
+                  >
+                    {uploading ? t.products.uploading : t.products.uploadImage}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
                 <input
                   type="url"
-                  placeholder="https://..."
+                  placeholder={t.products.orPasteUrl}
                   value={draft.imageUrl}
                   onChange={(e) => updateDraft("imageUrl", e.target.value)}
-                  className="w-full rounded-xl border border-stone-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                  className="mt-3 w-full rounded-xl border border-stone-200 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
             </div>
@@ -603,7 +701,7 @@ export default function ProductForm() {
                 disabled={submitting}
                 className={`${btnPrimary} disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {submitting ? "Saving..." : "Save Product"}
+                {submitting ? t.products.saving : t.products.saveProduct}
               </button>
             </div>
 

@@ -7,6 +7,7 @@ const ORDER_LIST_SELECT = `
   user_id,
   status,
   pickup_time,
+  pickup_location,
   subtotal,
   discount,
   reward_discount,

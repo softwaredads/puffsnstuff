@@ -40,6 +40,7 @@ export interface Order {
   user_id: string;
   status: OrderStatus;
   pickup_time: string;
+  pickup_location?: string | null;
   subtotal: number;
   discount: number;
   reward_discount?: number;

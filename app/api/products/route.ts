@@ -3,6 +3,7 @@ import {
   fetchProducts,
   type CreateProductInput,
 } from "@/lib/menu";
+import { parseLangParam } from "@/lib/i18n/resolveName";
 import {
   errorResponse,
   handleApiError,
@@ -14,9 +15,10 @@ export async function OPTIONS() {
   return optionsResponse();
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const products = await fetchProducts();
+    const lang = parseLangParam(new URL(request.url).searchParams.get("lang"));
+    const products = await fetchProducts(lang);
     return jsonResponse({ data: products });
   } catch (error) {
     return handleApiError(error);

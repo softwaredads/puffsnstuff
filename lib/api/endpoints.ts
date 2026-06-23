@@ -1,4 +1,5 @@
 export const API = {
+  featured: "/api/featured",
   products: "/api/products",
   groups: "/api/groups",
   categories: "/api/categories",
@@ -7,4 +8,5 @@ export const API = {
   stampCard: "/api/stamp-card",
   users: "/api/users",
   stats: "/api/stats",
+  pickupLocations: "/api/pickup-locations",
 } as const;
