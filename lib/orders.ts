@@ -20,6 +20,10 @@ const ORDER_LIST_SELECT = `
   reward_label,
   customer_name,
   customer_phone,
+  payment_status,
+  viva_order_code,
+  viva_transaction_id,
+  paid_at,
   created_at,
   updated_at
 `;

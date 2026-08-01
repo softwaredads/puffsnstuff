@@ -140,9 +140,14 @@ export default function OrderRow({
         <p className="truncate text-sm font-medium text-zinc-900">
           {summary.total.toFixed(0)} kr
         </p>
-        <Badge variant={STATUS_VARIANT[order.status]}>
-          {STATUS_LABELS[order.status]}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          <Badge variant={STATUS_VARIANT[order.status]}>
+            {STATUS_LABELS[order.status]}
+          </Badge>
+          <Badge variant={order.payment_status === "paid" ? "success" : "muted"}>
+            {order.payment_status === "paid" ? "Paid" : "Unpaid"}
+          </Badge>
+        </div>
         <div
           className="ml-auto flex shrink-0 items-center gap-1"
           onClick={(e) => e.stopPropagation()}

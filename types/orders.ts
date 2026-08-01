@@ -53,6 +53,10 @@ export interface Order {
   reward_label: string | null;
   customer_name: string | null;
   customer_phone: string | null;
+  payment_status?: "unpaid" | "paid";
+  viva_order_code?: number | null;
+  viva_transaction_id?: string | null;
+  paid_at?: string | null;
   created_at: string;
   updated_at: string;
   order_items?: OrderItem[];
