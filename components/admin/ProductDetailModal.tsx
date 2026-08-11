@@ -1,24 +1,48 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { Product } from "@/types/menu";
 import { formatPrice, getProductDisplayGroups } from "@/lib/menu";
-import { Badge } from "@/components/admin/ui";
+import { apiDelete } from "@/lib/api/client";
+import { Badge, btnDanger, btnPrimary } from "@/components/admin/ui";
 
 export default function ProductDetailModal({
   product,
   onClose,
+  onDeleted,
 }: {
   product: Product;
   onClose: () => void;
+  onDeleted: (id: string) => void;
 }) {
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !deleting) onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [deleting, onClose]);
+
+  const remove = async () => {
+    const confirmed = window.confirm(
+      `Permanently delete "${product.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeleteError(null);
+    setDeleting(true);
+    try {
+      await apiDelete<unknown>(`/api/products/${product.id}`);
+      onDeleted(product.id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
+    }
+  };
 
   const displayGroups = getProductDisplayGroups(product);
   const optionCount = displayGroups.reduce((sum, g) => sum + g.options.length, 0);
@@ -26,7 +50,9 @@ export default function ProductDetailModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
+      onClick={() => {
+        if (!deleting) onClose();
+      }}
     >
       <div
         role="dialog"
@@ -46,17 +72,47 @@ export default function ProductDetailModal({
               {product.name}
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg px-2 py-1 text-2xl leading-none text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={deleting}
+              className={btnDanger}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+            <Link
+              href={`/products/${product.id}/edit`}
+              aria-disabled={deleting}
+              tabIndex={deleting ? -1 : undefined}
+              className={`${btnPrimary} px-3 py-2 ${
+                deleting ? "pointer-events-none opacity-50" : ""
+              }`}
+            >
+              Edit
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="rounded-lg px-2 py-1 text-2xl leading-none text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <div className="space-y-5 px-6 py-5">
+          {deleteError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              {deleteError}
+            </div>
+          )}
+
           {product.image_url && (
             // eslint-disable-next-line @next/next/no-img-element
             <img

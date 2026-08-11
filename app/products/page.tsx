@@ -5,7 +5,7 @@ import Link from "next/link";
 import AdminShell, { PageHeader } from "@/components/admin/AdminShell";
 import ProductDetailModal from "@/components/admin/ProductDetailModal";
 import { useAdminLanguage } from "@/context/AdminLanguageContext";
-import { apiGet } from "@/lib/api/client";
+import { apiDelete, apiGet } from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { formatPrice, getProductDisplayGroups } from "@/lib/menu";
 import { btnPrimary, Badge, Card, inputClass } from "@/components/admin/ui";
@@ -16,6 +16,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [query, setQuery] = useState("");
 
@@ -34,6 +36,28 @@ export default function ProductsPage() {
           (p.categories?.name ?? "").toLowerCase().includes(term)
       )
     : products;
+
+  async function deleteFromList(product: Product) {
+    const confirmed = window.confirm(
+      `Permanently delete "${product.name}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setActionError(null);
+    setDeletingId(product.id);
+    try {
+      await apiDelete<{ id: string }>(
+        `${API.products}/${encodeURIComponent(product.id)}`
+      );
+      setProducts((current) =>
+        current.filter((item) => item.id !== product.id)
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <AdminShell>
@@ -84,6 +108,15 @@ export default function ProductsPage() {
         />
       )}
 
+      {actionError && (
+        <p
+          role="alert"
+          className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {actionError}
+        </p>
+      )}
+
       {!loading && !error && products.length > 0 && filtered.length === 0 && (
         <Card className="border-dashed p-8 text-center text-sm text-zinc-500">
           {t.products.noSearchResults}
@@ -94,54 +127,78 @@ export default function ProductsPage() {
         <Card className="divide-y divide-zinc-100 overflow-hidden">
           {filtered.map((product) => {
             const groups = getProductDisplayGroups(product);
+            const deleting = deletingId === product.id;
             return (
-              <button
-                key={product.id}
-                type="button"
-                onClick={() => setSelected(product)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left transition hover:bg-zinc-50"
-              >
-                {product.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={product.image_url}
-                    alt={product.name}
-                    className="h-11 w-11 shrink-0 rounded-lg border border-zinc-100 object-cover"
-                  />
-                ) : (
-                  <div className="h-11 w-11 shrink-0 rounded-lg bg-zinc-100" />
-                )}
+              <div key={product.id} className="flex items-center gap-2 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelected(product)}
+                  disabled={deleting}
+                  className="flex min-w-0 flex-1 items-center gap-4 rounded-lg px-2 py-1.5 text-left transition hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  {product.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="h-11 w-11 shrink-0 rounded-lg border border-zinc-100 object-cover"
+                    />
+                  ) : (
+                    <div className="h-11 w-11 shrink-0 rounded-lg bg-zinc-100" />
+                  )}
 
-                <div className="min-w-0 shrink-0 sm:w-56">
-                  <p className="truncate font-medium text-zinc-900">
-                    {product.name}
-                  </p>
-                  <p className="truncate text-sm text-zinc-500">
-                    {product.categories?.name ?? "Uncategorized"}
-                  </p>
-                </div>
-
-                {groups.length > 0 && (
-                  <div className="hidden flex-wrap gap-1 sm:flex">
-                    {groups.map((group) => (
-                      <Badge
-                        key={`${group.source}-${group.id}`}
-                        variant={group.source === "template" ? "accent" : "warning"}
-                      >
-                        {group.name}
-                      </Badge>
-                    ))}
+                  <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+                    <p className="truncate font-medium text-zinc-900">
+                      {product.name}
+                    </p>
+                    <p className="truncate text-sm text-zinc-500">
+                      {product.categories?.name ?? "Uncategorized"}
+                    </p>
                   </div>
-                )}
 
-                <div className="flex-1" />
+                  {groups.length > 0 && (
+                    <div className="hidden flex-wrap gap-1 sm:flex">
+                      {groups.map((group) => (
+                        <Badge
+                          key={`${group.source}-${group.id}`}
+                          variant={group.source === "template" ? "accent" : "warning"}
+                        >
+                          {group.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
 
-                {!product.is_active && <Badge variant="muted">Inactive</Badge>}
+                  <div className="flex-1" />
 
-                <p className="shrink-0 font-semibold tabular-nums text-zinc-900">
-                  {formatPrice(Number(product.base_price))}
-                </p>
-              </button>
+                  {!product.is_active && <Badge variant="muted">Inactive</Badge>}
+
+                  <p className="shrink-0 font-semibold tabular-nums text-zinc-900">
+                    {formatPrice(Number(product.base_price))}
+                  </p>
+                </button>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  <Link
+                    href={`/products/${product.id}/edit`}
+                    aria-disabled={deleting}
+                    tabIndex={deleting ? -1 : undefined}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium text-indigo-600 transition hover:bg-indigo-50 ${
+                      deleting ? "pointer-events-none opacity-50" : ""
+                    }`}
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => deleteFromList(product)}
+                    disabled={deleting}
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {deleting ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
             );
           })}
         </Card>
@@ -151,6 +208,12 @@ export default function ProductsPage() {
         <ProductDetailModal
           product={selected}
           onClose={() => setSelected(null)}
+          onDeleted={(id) => {
+            setProducts((current) =>
+              current.filter((product) => product.id !== id)
+            );
+            setSelected(null);
+          }}
         />
       )}
     </AdminShell>

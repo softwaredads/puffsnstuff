@@ -11,7 +11,7 @@ import {
   Card,
   Badge,
 } from "@/components/admin/ui";
-import { apiGet, apiPost } from "@/lib/api/client";
+import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
 import { apiUrl } from "@/lib/api/config";
 import { API } from "@/lib/api/endpoints";
 import { useAdminLanguage } from "@/context/AdminLanguageContext";
@@ -56,30 +56,80 @@ const initialDraft: ProductDraft = {
   groups: [],
 };
 
-export default function ProductForm() {
+function draftFromProduct(product: Product): ProductDraft {
+  return {
+    categoryMode: "existing",
+    categoryId: product.categories?.id ?? "",
+    categoryName: "",
+    categoryNameDa: "",
+    categoryNameEn: "",
+    name: product.name,
+    nameDa: product.name_da ?? "",
+    nameEn: product.name_en ?? product.name,
+    description: product.description ?? "",
+    imageUrl: product.image_url ?? "",
+    basePrice: String(product.base_price),
+    selectedTemplateIds: (product.product_group_templates ?? [])
+      .map((link) => link.group_templates?.id)
+      .filter((id): id is string => Boolean(id)),
+    groups: (product.customization_groups ?? []).map((group) => ({
+      key: group.id,
+      name: group.name,
+      selection_type: group.selection_type,
+      is_required: group.is_required,
+      options: (group.customization_options ?? []).map((option) => ({
+        key: option.id,
+        name: option.name,
+        price: String(option.price),
+      })),
+    })),
+  };
+}
+
+export default function ProductForm({ productId }: { productId?: string }) {
   const router = useRouter();
   const { t } = useAdminLanguage();
+  const isEditing = Boolean(productId);
   const [draft, setDraft] = useState<ProductDraft>(initialDraft);
   const [categories, setCategories] = useState<Category[]>([]);
   const [templates, setTemplates] = useState<GroupTemplate[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     Promise.all([
       apiGet<Category[]>(API.categories),
       apiGet<GroupTemplate[]>(API.groups),
+      productId
+        ? apiGet<Product>(`${API.products}/${encodeURIComponent(productId)}`)
+        : Promise.resolve(null),
     ])
-      .then(([cats, tmpls]) => {
+      .then(([cats, tmpls, product]) => {
+        if (cancelled) return;
         setCategories(cats);
         setTemplates(tmpls);
+        if (product) setDraft(draftFromProduct(product));
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoadingMeta(false));
-  }, []);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : "Failed to load product";
+        if (productId) setLoadError(message);
+        else setError(message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMeta(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   const previewTotal = useMemo(() => {
     const base = Number(draft.basePrice) || 0;
@@ -197,12 +247,13 @@ export default function ProductForm() {
     setError(null);
     setSuccess(false);
 
-    const basePrice = Number(draft.basePrice);
+    const basePriceText = draft.basePrice.trim();
+    const basePrice = Number(basePriceText);
     if (!draft.nameDa.trim() && !draft.nameEn.trim()) {
       setError(t.products.productNameRequired);
       return;
     }
-    if (!basePrice || basePrice < 0) {
+    if (basePriceText === "" || !Number.isFinite(basePrice) || basePrice < 0) {
       setError(t.products.validBasePrice);
       return;
     }
@@ -219,9 +270,44 @@ export default function ProductForm() {
       return;
     }
 
+    for (const [groupIndex, group] of draft.groups.entries()) {
+      const groupNumber = groupIndex + 1;
+      if (!group.name.trim()) {
+        setError(`Custom group ${groupNumber}: enter a group name.`);
+        return;
+      }
+      if (group.options.length === 0) {
+        setError(`Custom group ${groupNumber}: add at least one option.`);
+        return;
+      }
+
+      for (const [optionIndex, option] of group.options.entries()) {
+        const optionNumber = optionIndex + 1;
+        if (!option.name.trim()) {
+          setError(
+            `Custom group ${groupNumber}, option ${optionNumber}: enter an option name.`
+          );
+          return;
+        }
+
+        const optionPriceText = option.price.trim();
+        const optionPrice = Number(optionPriceText);
+        if (
+          optionPriceText === "" ||
+          !Number.isFinite(optionPrice) ||
+          optionPrice < 0
+        ) {
+          setError(
+            `Custom group ${groupNumber}, option ${optionNumber}: enter a valid price of 0 or more.`
+          );
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
     try {
-      await apiPost<Product>(API.products, {
+      const input = {
         categoryMode: draft.categoryMode,
         categoryId: draft.categoryId,
         categoryName: draft.categoryNameEn || draft.categoryNameDa,
@@ -235,7 +321,16 @@ export default function ProductForm() {
         basePrice,
         selectedTemplateIds: draft.selectedTemplateIds,
         groups: draft.groups,
-      } satisfies CreateProductInput);
+      } satisfies CreateProductInput;
+
+      if (productId) {
+        await apiPatch<Product>(
+          `${API.products}/${encodeURIComponent(productId)}`,
+          input
+        );
+      } else {
+        await apiPost<Product>(API.products, input);
+      }
       setSuccess(true);
       setTimeout(() => router.push("/products"), 1200);
     } catch (err) {
@@ -248,6 +343,38 @@ export default function ProductForm() {
   const hasCustomizations =
     draft.selectedTemplateIds.length > 0 || draft.groups.length > 0;
 
+  if (isEditing && loadingMeta) {
+    return (
+      <AdminShell>
+        <Link href="/products" className={`${btnGhost} mb-4 -ml-3`}>
+          {t.products.backToProducts}
+        </Link>
+        <PageHeader
+          title="Edit product"
+          description="Loading the product and its options..."
+        />
+        <Card className="mx-auto max-w-3xl p-6">
+          <div className="h-40 animate-pulse rounded-lg bg-zinc-100" />
+        </Card>
+      </AdminShell>
+    );
+  }
+
+  if (isEditing && loadError) {
+    return (
+      <AdminShell>
+        <Link href="/products" className={`${btnGhost} mb-4 -ml-3`}>
+          {t.products.backToProducts}
+        </Link>
+        <PageHeader title="Edit product" description="Update this menu item." />
+        <Card className="mx-auto max-w-3xl border-red-200 bg-red-50/50 p-6">
+          <p className="font-medium text-red-800">Could not load this product.</p>
+          <p className="mt-1 text-sm text-red-600">{loadError}</p>
+        </Card>
+      </AdminShell>
+    );
+  }
+
   return (
     <AdminShell>
       <Link href="/products" className={`${btnGhost} mb-4 -ml-3`}>
@@ -255,8 +382,12 @@ export default function ProductForm() {
       </Link>
 
       <PageHeader
-        title={t.products.addTitle}
-        description={t.products.addDescription}
+        title={isEditing ? "Edit product" : t.products.addTitle}
+        description={
+          isEditing
+            ? "Update product details, shared groups, and product-only options."
+            : t.products.addDescription
+        }
       />
 
       <Card className="mb-6 px-4 py-3 text-sm text-zinc-600">
@@ -701,7 +832,13 @@ export default function ProductForm() {
                 disabled={submitting}
                 className={`${btnPrimary} disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {submitting ? t.products.saving : t.products.saveProduct}
+                {submitting
+                  ? isEditing
+                    ? "Updating..."
+                    : t.products.saving
+                  : isEditing
+                    ? "Update product"
+                    : t.products.saveProduct}
               </button>
             </div>
 
@@ -712,7 +849,7 @@ export default function ProductForm() {
             )}
             {success && (
               <p className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
-                Product saved! Redirecting...
+                {isEditing ? "Product updated!" : "Product saved!"} Redirecting...
               </p>
             )}
           </Card>

@@ -28,16 +28,53 @@ export async function fetchGroupTemplates(): Promise<GroupTemplate[]> {
 export async function createGroupTemplate(
   draft: TemplateDraft
 ): Promise<GroupTemplate> {
-  const supabase = getSupabase();
-  if (!supabase) throw new Error("Supabase is not configured");
+  if (!draft || typeof draft !== "object") {
+    throw new Error("Template data is required");
+  }
 
-  const name = draft.name.trim();
+  const name = typeof draft.name === "string" ? draft.name.trim() : "";
   if (!name) throw new Error("Template name is required");
 
-  const validOptions = draft.options.filter((o) => o.name.trim());
-  if (validOptions.length === 0) {
+  if (draft.selection_type !== "single" && draft.selection_type !== "multi") {
+    throw new Error("Template must use single or multi selection");
+  }
+
+  if (typeof draft.is_required !== "boolean") {
+    throw new Error("Template has an invalid required value");
+  }
+
+  if (!Array.isArray(draft.options) || draft.options.length === 0) {
     throw new Error("Add at least one option to the template");
   }
+
+  const options = draft.options.map((option, index) => {
+    if (!option || typeof option !== "object") {
+      throw new Error(`Template option ${index + 1} is invalid`);
+    }
+
+    const optionName =
+      typeof option.name === "string" ? option.name.trim() : "";
+    if (!optionName) {
+      throw new Error(`Template option ${index + 1} needs a name`);
+    }
+
+    if (typeof option.price !== "string" || !option.price.trim()) {
+      throw new Error(`Template option ${index + 1} needs a price`);
+    }
+
+    const price = Number(option.price);
+    if (!Number.isFinite(price) || price < 0) {
+      throw new Error(
+        `Template option ${index + 1} needs a finite price of 0 or more`
+      );
+    }
+
+    return { name: optionName, price };
+  });
+
+  // Everything is validated before either the template or its options are written.
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
 
   const { data: template, error: templateError } = await supabase
     .from("group_templates")
@@ -52,10 +89,10 @@ export async function createGroupTemplate(
   if (templateError) throw templateError;
 
   const { error: optionsError } = await supabase.from("template_options").insert(
-    validOptions.map((option) => ({
+    options.map((option) => ({
       template_id: template.id,
-      name: option.name.trim(),
-      price: Number(option.price) || 0,
+      name: option.name,
+      price: option.price,
     }))
   );
 

@@ -9,7 +9,6 @@ import { API } from "@/lib/api/endpoints";
 import {
   btnGhost,
   btnPrimary,
-  btnSecondary,
   Card,
   inputClass,
   labelClass,
@@ -69,6 +68,30 @@ export default function GroupTemplateForm() {
     e.preventDefault();
     setError(null);
     setSuccess(false);
+
+    if (!draft.name.trim()) {
+      setError("Group name is required");
+      return;
+    }
+
+    const blankOptionIndex = draft.options.findIndex(
+      (option) => !option.name.trim()
+    );
+    if (blankOptionIndex !== -1) {
+      setError(`Option ${blankOptionIndex + 1} needs a name`);
+      return;
+    }
+
+    const invalidPriceIndex = draft.options.findIndex((option) => {
+      if (!option.price.trim()) return true;
+      const price = Number(option.price);
+      return !Number.isFinite(price) || price < 0;
+    });
+    if (invalidPriceIndex !== -1) {
+      setError(`Option ${invalidPriceIndex + 1} needs a valid price`);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
