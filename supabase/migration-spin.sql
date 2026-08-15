@@ -15,6 +15,7 @@ end $$;
 create table if not exists public.spin_prizes (
   id                      uuid primary key default gen_random_uuid(),
   label                   text not null,
+  icon_url                text,
   prize_type              spin_prize_type not null,
   points_value            int not null default 0 check (points_value >= 0),
   gift_kind               gift_kind,

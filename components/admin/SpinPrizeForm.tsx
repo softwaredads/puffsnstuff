@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell, { PageHeader } from "@/components/admin/AdminShell";
 import { apiGet, apiPost } from "@/lib/api/client";
+import { uploadSpinIcon } from "@/lib/api/upload";
 import { API } from "@/lib/api/endpoints";
 import {
   btnPrimary,
+  btnSecondary,
   btnGhost,
   Card,
   inputClass,
@@ -31,6 +33,7 @@ const WHEEL_COLORS = [
 
 const defaultDraft = (): SpinPrizeDraft => ({
   label: "",
+  icon_url: null,
   prize_type: "points",
   points_value: 25,
   gift_kind: null,
@@ -58,6 +61,7 @@ export default function SpinPrizeForm() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [groups, setGroups] = useState<GroupTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -105,8 +109,26 @@ export default function SpinPrizeForm() {
     }));
   };
 
+  const handleIconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setUploadingIcon(true);
+    try {
+      const iconUrl = await uploadSpinIcon(file);
+      setDraft((prev) => ({ ...prev, icon_url: iconUrl }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Icon upload failed");
+    } finally {
+      setUploadingIcon(false);
+      e.target.value = "";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (uploadingIcon) return;
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -150,6 +172,70 @@ export default function SpinPrizeForm() {
                   }
                   placeholder="Free Churros"
                   required
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Wheel icon</label>
+                <p className="mb-3 text-xs text-zinc-500">
+                  Shown above the label. Use a square transparent PNG or WebP
+                  for the cleanest result (maximum 2 MB).
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  {draft.icon_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.icon_url}
+                      alt="Wheel icon preview"
+                      className="h-16 w-16 rounded-xl border border-zinc-200 bg-zinc-50 object-contain p-1"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 text-[10px] text-zinc-400">
+                      No icon
+                    </div>
+                  )}
+                  <label
+                    className={`${btnSecondary} cursor-pointer ${
+                      uploadingIcon ? "pointer-events-none opacity-60" : ""
+                    }`}
+                  >
+                    {uploadingIcon
+                      ? "Uploading…"
+                      : draft.icon_url
+                        ? "Replace icon"
+                        : "Upload icon"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleIconUpload}
+                      disabled={uploadingIcon}
+                      className="hidden"
+                    />
+                  </label>
+                  {draft.icon_url && (
+                    <button
+                      type="button"
+                      className={btnGhost}
+                      onClick={() =>
+                        setDraft((prev) => ({ ...prev, icon_url: null }))
+                      }
+                      disabled={uploadingIcon}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="url"
+                  className={`${inputClass} mt-3`}
+                  value={draft.icon_url ?? ""}
+                  onChange={(e) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      icon_url: e.target.value || null,
+                    }))
+                  }
+                  placeholder="Or paste an HTTPS icon URL"
                 />
               </div>
 
@@ -511,8 +597,12 @@ export default function SpinPrizeForm() {
             <Link href="/spin-prizes" className={btnGhost}>
               Cancel
             </Link>
-            <button type="submit" className={btnPrimary} disabled={saving}>
-              {saving ? "Saving…" : "Add to wheel"}
+            <button
+              type="submit"
+              className={btnPrimary}
+              disabled={saving || uploadingIcon}
+            >
+              {saving ? "Saving…" : uploadingIcon ? "Uploading icon…" : "Add to wheel"}
             </button>
           </div>
         </form>

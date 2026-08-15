@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { apiDelete, apiPatch } from "@/lib/api/client";
+import { uploadSpinIcon } from "@/lib/api/upload";
 import { API } from "@/lib/api/endpoints";
 import { Badge, Card, btnGhost, btnDanger } from "@/components/admin/ui";
 import type { SpinPrize } from "@/types/spin";
@@ -49,6 +50,7 @@ export default function SpinPrizeCard({
   onDeleted: (id: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const toggleActive = async () => {
     setBusy(true);
@@ -86,6 +88,41 @@ export default function SpinPrizeCard({
     }
   };
 
+  const changeIcon = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingIcon(true);
+    try {
+      const iconUrl = await uploadSpinIcon(file);
+      const updated = await apiPatch<SpinPrize>(
+        `${API.spinPrizes}/${prize.id}`,
+        { icon_url: iconUrl }
+      );
+      onUpdated(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Icon update failed");
+    } finally {
+      setUploadingIcon(false);
+      e.target.value = "";
+    }
+  };
+
+  const removeIcon = async () => {
+    setUploadingIcon(true);
+    try {
+      const updated = await apiPatch<SpinPrize>(
+        `${API.spinPrizes}/${prize.id}`,
+        { icon_url: null }
+      );
+      onUpdated(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Icon update failed");
+    } finally {
+      setUploadingIcon(false);
+    }
+  };
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-stretch">
@@ -96,9 +133,21 @@ export default function SpinPrizeCard({
         />
         <div className="flex flex-1 flex-col gap-3 p-5">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h3 className="font-semibold text-zinc-900">{prize.label}</h3>
-              <p className="mt-0.5 text-sm text-zinc-500">{prizeSummary(prize)}</p>
+            <div className="flex items-center gap-3">
+              {prize.icon_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={prize.icon_url}
+                  alt=""
+                  className="h-12 w-12 shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 object-contain p-1"
+                />
+              )}
+              <div>
+                <h3 className="font-semibold text-zinc-900">{prize.label}</h3>
+                <p className="mt-0.5 text-sm text-zinc-500">
+                  {prizeSummary(prize)}
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant={prize.is_active ? "success" : "muted"}>
@@ -115,10 +164,38 @@ export default function SpinPrizeCard({
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
+            <label
+              className={`${btnGhost} cursor-pointer ${
+                busy || uploadingIcon ? "pointer-events-none opacity-50" : ""
+              }`}
+            >
+              {uploadingIcon
+                ? "Updating icon…"
+                : prize.icon_url
+                  ? "Change icon"
+                  : "Add icon"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={changeIcon}
+                disabled={busy || uploadingIcon}
+                className="hidden"
+              />
+            </label>
+            {prize.icon_url && (
+              <button
+                type="button"
+                className={btnGhost}
+                disabled={busy || uploadingIcon}
+                onClick={removeIcon}
+              >
+                Remove icon
+              </button>
+            )}
             <button
               type="button"
               className={btnGhost}
-              disabled={busy}
+              disabled={busy || uploadingIcon}
               onClick={toggleActive}
             >
               {prize.is_active ? "Hide" : "Activate"}
@@ -126,7 +203,7 @@ export default function SpinPrizeCard({
             <button
               type="button"
               className={btnDanger}
-              disabled={busy}
+              disabled={busy || uploadingIcon}
               onClick={remove}
             >
               Delete

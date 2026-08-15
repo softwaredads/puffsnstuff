@@ -4,6 +4,7 @@ import type { SpinPrize, SpinPrizeDraft } from "@/types/spin";
 const PRIZE_SELECT = `
   id,
   label,
+  icon_url,
   prize_type,
   points_value,
   gift_kind,
@@ -30,6 +31,24 @@ const PRIZE_SELECT = `
 
 function normalizePrize(row: Record<string, unknown>): SpinPrize {
   return row as unknown as SpinPrize;
+}
+
+function normalizeIconUrl(value: string | null): string | null {
+  const iconUrl = value?.trim() || null;
+  if (!iconUrl) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(iconUrl);
+  } catch {
+    throw new Error("Enter a valid icon URL");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Icon URL must start with http:// or https://");
+  }
+
+  return iconUrl;
 }
 
 function validateDraft(draft: SpinPrizeDraft): SpinPrizeDraft {
@@ -80,6 +99,7 @@ function validateDraft(draft: SpinPrizeDraft): SpinPrizeDraft {
   return {
     ...draft,
     label,
+    icon_url: normalizeIconUrl(draft.icon_url),
     points_value: draft.prize_type === "points" ? draft.points_value : 0,
     gift_kind: draft.prize_type === "gift" ? draft.gift_kind : null,
     product_id:
@@ -109,6 +129,7 @@ function toRow(draft: SpinPrizeDraft) {
   const v = validateDraft(draft);
   return {
     label: v.label,
+    icon_url: v.icon_url,
     prize_type: v.prize_type,
     points_value: v.points_value,
     gift_kind: v.gift_kind,
@@ -166,6 +187,9 @@ export async function updateSpinPrize(
 
   const patch: Record<string, unknown> = {};
   if (draft.label !== undefined) patch.label = draft.label.trim();
+  if (draft.icon_url !== undefined) {
+    patch.icon_url = normalizeIconUrl(draft.icon_url);
+  }
   if (draft.prize_type !== undefined) patch.prize_type = draft.prize_type;
   if (draft.points_value !== undefined) patch.points_value = draft.points_value;
   if (draft.gift_kind !== undefined) patch.gift_kind = draft.gift_kind;
