@@ -62,3 +62,63 @@ export async function createPickupLocation(
   if (error) throw error;
   return data as PickupLocation;
 }
+
+export async function updatePickupLocation(
+  id: string,
+  draft: PickupLocationDraft
+): Promise<PickupLocation> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const locationId = (id ?? "").trim();
+  if (!locationId) throw new Error("Location id is required");
+
+  const name = draft.name.trim();
+  const address = draft.address.trim();
+  const openTime = normalizeTime(draft.open_time, "10:00");
+  const closeTime = normalizeTime(draft.close_time, "21:00");
+  const interval = Math.round(Number(draft.slot_interval_minutes));
+
+  if (!name) throw new Error("Name is required");
+  if (!address) throw new Error("Address is required");
+  if (closeTime <= openTime) {
+    throw new Error("Close time must be after open time");
+  }
+  if (!Number.isFinite(interval) || interval <= 0) {
+    throw new Error("Interval must be a positive number");
+  }
+
+  const { data, error } = await supabase
+    .from("pickup_locations")
+    .update({
+      name,
+      address,
+      open_time: openTime,
+      close_time: closeTime,
+      slot_interval_minutes: interval,
+    })
+    .eq("id", locationId)
+    .select(SELECT_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return data as PickupLocation;
+}
+
+export async function deletePickupLocation(id: string): Promise<PickupLocation> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const locationId = (id ?? "").trim();
+  if (!locationId) throw new Error("Location id is required");
+
+  const { data, error } = await supabase
+    .from("pickup_locations")
+    .delete()
+    .eq("id", locationId)
+    .select(SELECT_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return data as PickupLocation;
+}

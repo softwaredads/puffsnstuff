@@ -77,6 +77,84 @@ export async function fetchCategories(lang: AppLang = "da"): Promise<Category[]>
   );
 }
 
+export type CategoryDraft = {
+  name_da?: string;
+  name_en?: string;
+};
+
+function validateCategoryDraft(input: CategoryDraft) {
+  const nameEn = typeof input.name_en === "string" ? input.name_en.trim() : "";
+  const nameDa = typeof input.name_da === "string" ? input.name_da.trim() : "";
+  if (!nameEn && !nameDa) {
+    throw new Error("Enter a category name");
+  }
+  return {
+    name: nameEn || nameDa,
+    name_en: nameEn || nameDa,
+    name_da: nameDa || nameEn,
+  };
+}
+
+export async function createCategory(
+  input: CategoryDraft,
+  lang: AppLang = "da"
+): Promise<Category> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const payload = validateCategoryDraft(input);
+  const { data, error } = await supabase
+    .from("categories")
+    .insert(payload)
+    .select("id, name, name_da, name_en, is_active, created_at")
+    .single();
+
+  if (error) throw error;
+  return localizeCategory(data as Category, lang);
+}
+
+export async function updateCategory(
+  id: string,
+  input: CategoryDraft,
+  lang: AppLang = "da"
+): Promise<Category> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const categoryId = trimmed(id);
+  if (!categoryId) throw new Error("Category id is required");
+
+  const payload = validateCategoryDraft(input);
+  const { data, error } = await supabase
+    .from("categories")
+    .update(payload)
+    .eq("id", categoryId)
+    .select("id, name, name_da, name_en, is_active, created_at")
+    .single();
+
+  if (error) throw error;
+  return localizeCategory(data as Category, lang);
+}
+
+/** Soft-delete so products that still reference the category stay valid. */
+export async function deleteCategory(id: string): Promise<Category> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const categoryId = trimmed(id);
+  if (!categoryId) throw new Error("Category id is required");
+
+  const { data, error } = await supabase
+    .from("categories")
+    .update({ is_active: false })
+    .eq("id", categoryId)
+    .select("id, name, name_da, name_en, is_active, created_at")
+    .single();
+
+  if (error) throw error;
+  return data as Category;
+}
+
 export async function fetchProducts(lang: AppLang = "da"): Promise<Product[]> {
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase is not configured");

@@ -2,6 +2,7 @@ export const en = {
   nav: {
     dashboard: "Dashboard",
     products: "Products",
+    categories: "Categories",
     addProduct: "Add Product",
     stampCard: "Stamp Card",
     users: "Users",

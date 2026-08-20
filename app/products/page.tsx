@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminShell, { PageHeader } from "@/components/admin/AdminShell";
 import ProductDetailModal from "@/components/admin/ProductDetailModal";
@@ -8,8 +8,16 @@ import { useAdminLanguage } from "@/context/AdminLanguageContext";
 import { apiDelete, apiGet } from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { formatPrice, getProductDisplayGroups } from "@/lib/menu";
-import { btnPrimary, Badge, Card, inputClass } from "@/components/admin/ui";
+import {
+  btnPrimary,
+  Badge,
+  Card,
+  inputClass,
+  selectClass,
+} from "@/components/admin/ui";
 import type { Product } from "@/types/menu";
+
+type SortKey = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "newest";
 
 export default function ProductsPage() {
   const { t } = useAdminLanguage();
@@ -20,6 +28,8 @@ export default function ProductsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [query, setQuery] = useState("");
+  const [categoryId, setCategoryId] = useState("all");
+  const [sort, setSort] = useState<SortKey>("newest");
 
   useEffect(() => {
     apiGet<Product[]>(API.products)
@@ -28,14 +38,54 @@ export default function ProductsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const term = query.trim().toLowerCase();
-  const filtered = term
-    ? products.filter(
+  const categories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const product of products) {
+      if (product.categories?.id && product.categories.name) {
+        map.set(product.categories.id, product.categories.name);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [products]);
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    let list = products;
+
+    if (categoryId !== "all") {
+      list = list.filter((p) => p.categories?.id === categoryId);
+    }
+
+    if (term) {
+      list = list.filter(
         (p) =>
           p.name.toLowerCase().includes(term) ||
           (p.categories?.name ?? "").toLowerCase().includes(term)
-      )
-    : products;
+      );
+    }
+
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (sort) {
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "price-asc":
+          return Number(a.base_price) - Number(b.base_price);
+        case "price-desc":
+          return Number(b.base_price) - Number(a.base_price);
+        case "newest":
+        default:
+          return (
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+      }
+    });
+    return sorted;
+  }, [products, query, categoryId, sort]);
 
   async function deleteFromList(product: Product) {
     const confirmed = window.confirm(
@@ -99,13 +149,38 @@ export default function ProductsPage() {
       )}
 
       {!loading && !error && products.length > 0 && (
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t.products.searchPlaceholder}
-          className={`${inputClass} mb-4`}
-        />
+        <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_180px_180px]">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t.products.searchPlaceholder}
+            className={inputClass}
+          />
+          <select
+            className={selectClass}
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            <option value="all">All categories</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className={selectClass}
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+          >
+            <option value="newest">Newest</option>
+            <option value="name-asc">Name A–Z</option>
+            <option value="name-desc">Name Z–A</option>
+            <option value="price-asc">Price low–high</option>
+            <option value="price-desc">Price high–low</option>
+          </select>
+        </div>
       )}
 
       {actionError && (

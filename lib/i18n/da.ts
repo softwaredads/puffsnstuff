@@ -4,6 +4,7 @@ export const da: AdminDict = {
   nav: {
     dashboard: "Oversigt",
     products: "Produkter",
+    categories: "Kategorier",
     addProduct: "Tilføj produkt",
     stampCard: "Stempelkort",
     users: "Brugere",
