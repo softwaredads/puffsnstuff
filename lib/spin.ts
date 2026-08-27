@@ -4,6 +4,7 @@ import type { SpinPrize, SpinPrizeDraft } from "@/types/spin";
 const PRIZE_SELECT = `
   id,
   label,
+  description,
   icon_url,
   prize_type,
   points_value,
@@ -129,6 +130,7 @@ function toRow(draft: SpinPrizeDraft) {
   const v = validateDraft(draft);
   return {
     label: v.label,
+    description: (v.description ?? "").trim() || null,
     icon_url: v.icon_url,
     prize_type: v.prize_type,
     points_value: v.points_value,
@@ -178,6 +180,20 @@ export async function createSpinPrize(draft: SpinPrizeDraft): Promise<SpinPrize>
   return normalizePrize(data as Record<string, unknown>);
 }
 
+export async function fetchSpinPrizeById(id: string): Promise<SpinPrize> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const { data, error } = await supabase
+    .from("spin_prizes")
+    .select(PRIZE_SELECT)
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return normalizePrize(data as Record<string, unknown>);
+}
+
 export async function updateSpinPrize(
   id: string,
   draft: Partial<SpinPrizeDraft>
@@ -185,42 +201,57 @@ export async function updateSpinPrize(
   const supabase = getSupabase();
   if (!supabase) throw new Error("Supabase is not configured");
 
-  const patch: Record<string, unknown> = {};
-  if (draft.label !== undefined) patch.label = draft.label.trim();
-  if (draft.icon_url !== undefined) {
-    patch.icon_url = normalizeIconUrl(draft.icon_url);
+  // Full form save (has label + prize_type) → replace row fields via toRow.
+  // Partial saves (hide/activate, icon) keep the field-by-field path.
+  const isFullSave =
+    draft.label !== undefined && draft.prize_type !== undefined;
+
+  const patch: Record<string, unknown> = isFullSave
+    ? toRow(draft as SpinPrizeDraft)
+    : {};
+
+  if (!isFullSave) {
+    if (draft.label !== undefined) patch.label = draft.label.trim();
+    if (draft.description !== undefined) {
+      patch.description = draft.description.trim() || null;
+    }
+    if (draft.icon_url !== undefined) {
+      patch.icon_url = normalizeIconUrl(draft.icon_url);
+    }
+    if (draft.prize_type !== undefined) patch.prize_type = draft.prize_type;
+    if (draft.points_value !== undefined) patch.points_value = draft.points_value;
+    if (draft.gift_kind !== undefined) patch.gift_kind = draft.gift_kind;
+    if (draft.product_id !== undefined) patch.product_id = draft.product_id;
+    if (draft.category_id !== undefined) patch.category_id = draft.category_id;
+    if (draft.group_template_id !== undefined) {
+      patch.group_template_id = draft.group_template_id;
+    }
+    if (draft.template_option_id !== undefined) {
+      patch.template_option_id = draft.template_option_id;
+    }
+    if (draft.customization_group_id !== undefined) {
+      patch.customization_group_id = draft.customization_group_id;
+    }
+    if (draft.customization_option_id !== undefined) {
+      patch.customization_option_id = draft.customization_option_id;
+    }
+    if (draft.max_option_price_kr !== undefined) {
+      patch.max_option_price_kr = draft.max_option_price_kr;
+    }
+    if (draft.credit_amount_kr !== undefined) {
+      patch.credit_amount_kr = draft.credit_amount_kr;
+    }
+    if (draft.percent_value !== undefined) {
+      patch.percent_value = draft.percent_value;
+    }
+    if (draft.covers_base_only !== undefined) {
+      patch.covers_base_only = draft.covers_base_only;
+    }
+    if (draft.color !== undefined) patch.color = draft.color;
+    if (draft.weight !== undefined) patch.weight = draft.weight;
+    if (draft.sort_order !== undefined) patch.sort_order = draft.sort_order;
+    if (draft.is_active !== undefined) patch.is_active = draft.is_active;
   }
-  if (draft.prize_type !== undefined) patch.prize_type = draft.prize_type;
-  if (draft.points_value !== undefined) patch.points_value = draft.points_value;
-  if (draft.gift_kind !== undefined) patch.gift_kind = draft.gift_kind;
-  if (draft.product_id !== undefined) patch.product_id = draft.product_id;
-  if (draft.category_id !== undefined) patch.category_id = draft.category_id;
-  if (draft.group_template_id !== undefined) {
-    patch.group_template_id = draft.group_template_id;
-  }
-  if (draft.template_option_id !== undefined) {
-    patch.template_option_id = draft.template_option_id;
-  }
-  if (draft.customization_group_id !== undefined) {
-    patch.customization_group_id = draft.customization_group_id;
-  }
-  if (draft.customization_option_id !== undefined) {
-    patch.customization_option_id = draft.customization_option_id;
-  }
-  if (draft.max_option_price_kr !== undefined) {
-    patch.max_option_price_kr = draft.max_option_price_kr;
-  }
-  if (draft.credit_amount_kr !== undefined) {
-    patch.credit_amount_kr = draft.credit_amount_kr;
-  }
-  if (draft.percent_value !== undefined) patch.percent_value = draft.percent_value;
-  if (draft.covers_base_only !== undefined) {
-    patch.covers_base_only = draft.covers_base_only;
-  }
-  if (draft.color !== undefined) patch.color = draft.color;
-  if (draft.weight !== undefined) patch.weight = draft.weight;
-  if (draft.sort_order !== undefined) patch.sort_order = draft.sort_order;
-  if (draft.is_active !== undefined) patch.is_active = draft.is_active;
 
   const { data, error } = await supabase
     .from("spin_prizes")

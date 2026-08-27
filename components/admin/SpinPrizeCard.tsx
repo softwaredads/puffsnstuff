@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { apiDelete, apiPatch } from "@/lib/api/client";
 import { uploadSpinIcon } from "@/lib/api/upload";
 import { API } from "@/lib/api/endpoints";
@@ -164,6 +165,12 @@ export default function SpinPrizeCard({
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
+            <Link
+              href={`/spin-prizes/${encodeURIComponent(prize.id)}/edit`}
+              className={btnGhost}
+            >
+              Edit
+            </Link>
             <label
               className={`${btnGhost} cursor-pointer ${
                 busy || uploadingIcon ? "pointer-events-none opacity-50" : ""

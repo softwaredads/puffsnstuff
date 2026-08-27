@@ -8,6 +8,7 @@ export type GiftKind =
 export interface SpinPrize {
   id: string;
   label: string;
+  description: string | null;
   icon_url: string | null;
   prize_type: SpinPrizeType;
   points_value: number;
@@ -35,6 +36,7 @@ export interface SpinPrize {
 
 export interface SpinPrizeDraft {
   label: string;
+  description: string;
   icon_url: string | null;
   prize_type: SpinPrizeType;
   points_value: number;

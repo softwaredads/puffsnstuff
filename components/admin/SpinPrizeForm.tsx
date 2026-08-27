@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AdminShell, { PageHeader } from "@/components/admin/AdminShell";
-import { apiGet, apiPost } from "@/lib/api/client";
+import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
 import { uploadSpinIcon } from "@/lib/api/upload";
 import { API } from "@/lib/api/endpoints";
 import {
@@ -18,7 +18,12 @@ import {
   Section,
 } from "@/components/admin/ui";
 import type { Product, GroupTemplate, Category } from "@/types/menu";
-import type { GiftKind, SpinPrizeDraft, SpinPrizeType } from "@/types/spin";
+import type {
+  GiftKind,
+  SpinPrize,
+  SpinPrizeDraft,
+  SpinPrizeType,
+} from "@/types/spin";
 
 const WHEEL_COLORS = [
   "#ff6b6b",
@@ -33,6 +38,7 @@ const WHEEL_COLORS = [
 
 const defaultDraft = (): SpinPrizeDraft => ({
   label: "",
+  description: "",
   icon_url: null,
   prize_type: "points",
   points_value: 25,
@@ -54,8 +60,40 @@ const defaultDraft = (): SpinPrizeDraft => ({
   is_active: true,
 });
 
-export default function SpinPrizeForm() {
+function draftFromPrize(prize: SpinPrize): SpinPrizeDraft {
+  const percentTarget: "product" | "category" =
+    prize.gift_kind === "percent_off" && prize.product_id && !prize.category_id
+      ? "product"
+      : "category";
+
+  return {
+    label: prize.label,
+    description: prize.description ?? "",
+    icon_url: prize.icon_url,
+    prize_type: prize.prize_type,
+    points_value: prize.points_value,
+    gift_kind: prize.gift_kind,
+    product_id: prize.product_id,
+    group_template_id: prize.group_template_id,
+    template_option_id: prize.template_option_id,
+    customization_group_id: prize.customization_group_id,
+    customization_option_id: prize.customization_option_id,
+    max_option_price_kr: prize.max_option_price_kr,
+    credit_amount_kr: prize.credit_amount_kr,
+    percent_value: prize.percent_value,
+    category_id: prize.category_id,
+    percent_target: percentTarget,
+    covers_base_only: prize.covers_base_only,
+    color: prize.color,
+    weight: prize.weight,
+    sort_order: prize.sort_order,
+    is_active: prize.is_active,
+  };
+}
+
+export default function SpinPrizeForm({ prizeId }: { prizeId?: string }) {
   const router = useRouter();
+  const isEditing = Boolean(prizeId);
   const [draft, setDraft] = useState<SpinPrizeDraft>(defaultDraft);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -67,19 +105,34 @@ export default function SpinPrizeForm() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     Promise.all([
       apiGet<Product[]>(API.products),
       apiGet<Category[]>(API.categories),
       apiGet<GroupTemplate[]>(API.groups),
+      prizeId
+        ? apiGet<SpinPrize>(`${API.spinPrizes}/${encodeURIComponent(prizeId)}`)
+        : Promise.resolve(null),
     ])
-      .then(([productList, categoryList, groupList]) => {
+      .then(([productList, categoryList, groupList, prize]) => {
+        if (cancelled) return;
         setProducts(productList.filter((p) => p.is_active));
         setCategories(categoryList.filter((c) => c.is_active));
         setGroups(groupList);
+        if (prize) setDraft(draftFromPrize(prize));
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [prizeId]);
 
   const selectedGroup = useMemo(
     () => groups.find((g) => g.id === draft.group_template_id) ?? null,
@@ -134,8 +187,13 @@ export default function SpinPrizeForm() {
     setSuccess(null);
 
     try {
-      await apiPost(API.spinPrizes, draft);
-      setSuccess("Prize added to the wheel!");
+      if (prizeId) {
+        await apiPatch(`${API.spinPrizes}/${encodeURIComponent(prizeId)}`, draft);
+        setSuccess("Prize updated!");
+      } else {
+        await apiPost(API.spinPrizes, draft);
+        setSuccess("Prize added to the wheel!");
+      }
       setTimeout(() => router.push("/spin-prizes"), 900);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save prize");
@@ -147,7 +205,7 @@ export default function SpinPrizeForm() {
   return (
     <AdminShell>
       <PageHeader
-        title="Add Wheel Prize"
+        title={isEditing ? "Edit Wheel Prize" : "Add Wheel Prize"}
         description="Configure a segment for the customer spin wheel — points, gifts, or try again."
         action={
           <Link href="/spin-prizes" className={btnGhost}>
@@ -172,6 +230,22 @@ export default function SpinPrizeForm() {
                   }
                   placeholder="Free Churros"
                   required
+                />
+              </div>
+
+              <div>
+                <label className={labelClass}>Description / details</label>
+                <p className="mb-2 text-xs text-zinc-500">
+                  Shown in the app when customers tap the prizes info icon.
+                </p>
+                <textarea
+                  className={`${inputClass} min-h-[96px] resize-y`}
+                  value={draft.description}
+                  onChange={(e) =>
+                    setDraft((p) => ({ ...p, description: e.target.value }))
+                  }
+                  placeholder="e.g. Free classic churros — redeem at checkout within 7 days."
+                  rows={4}
                 />
               </div>
 
@@ -253,7 +327,7 @@ export default function SpinPrizeForm() {
                   </select>
                 </div>
 
-                <div>
+                {/* <div>
                   <label className={labelClass}>Segment color</label>
                   <div className="flex flex-wrap gap-2">
                     {WHEEL_COLORS.map((color) => (
@@ -271,7 +345,7 @@ export default function SpinPrizeForm() {
                       />
                     ))}
                   </div>
-                </div>
+                </div> */}
               </div>
 
               {draft.prize_type === "points" && (
@@ -602,7 +676,13 @@ export default function SpinPrizeForm() {
               className={btnPrimary}
               disabled={saving || uploadingIcon}
             >
-              {saving ? "Saving…" : uploadingIcon ? "Uploading icon…" : "Add to wheel"}
+              {saving
+                ? "Saving…"
+                : uploadingIcon
+                  ? "Uploading icon…"
+                  : isEditing
+                    ? "Save changes"
+                    : "Add to wheel"}
             </button>
           </div>
         </form>

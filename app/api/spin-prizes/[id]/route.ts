@@ -1,4 +1,8 @@
-import { deleteSpinPrize, updateSpinPrize } from "@/lib/spin";
+import {
+  deleteSpinPrize,
+  fetchSpinPrizeById,
+  updateSpinPrize,
+} from "@/lib/spin";
 import type { SpinPrizeDraft } from "@/types/spin";
 import {
   handleApiError,
@@ -8,6 +12,19 @@ import {
 
 export async function OPTIONS() {
   return optionsResponse();
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const prize = await fetchSpinPrizeById(id);
+    return jsonResponse({ data: prize });
+  } catch (error) {
+    return handleApiError(error);
+  }
 }
 
 export async function PATCH(
