@@ -67,8 +67,9 @@ export async function fetchCategories(lang: AppLang = "da"): Promise<Category[]>
 
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name, name_da, name_en, is_active, created_at")
+    .select("id, name, name_da, name_en, sort_order, is_active, created_at")
     .eq("is_active", true)
+    .order("sort_order")
     .order("name");
 
   if (error) throw error;
@@ -80,6 +81,7 @@ export async function fetchCategories(lang: AppLang = "da"): Promise<Category[]>
 export type CategoryDraft = {
   name_da?: string;
   name_en?: string;
+  sort_order?: number;
 };
 
 function validateCategoryDraft(input: CategoryDraft) {
@@ -88,10 +90,15 @@ function validateCategoryDraft(input: CategoryDraft) {
   if (!nameEn && !nameDa) {
     throw new Error("Enter a category name");
   }
+  const sortOrder =
+    typeof input.sort_order === "number" && Number.isFinite(input.sort_order)
+      ? Math.trunc(input.sort_order)
+      : 0;
   return {
     name: nameEn || nameDa,
     name_en: nameEn || nameDa,
     name_da: nameDa || nameEn,
+    sort_order: sortOrder,
   };
 }
 
@@ -106,7 +113,7 @@ export async function createCategory(
   const { data, error } = await supabase
     .from("categories")
     .insert(payload)
-    .select("id, name, name_da, name_en, is_active, created_at")
+    .select("id, name, name_da, name_en, sort_order, is_active, created_at")
     .single();
 
   if (error) throw error;
@@ -129,7 +136,7 @@ export async function updateCategory(
     .from("categories")
     .update(payload)
     .eq("id", categoryId)
-    .select("id, name, name_da, name_en, is_active, created_at")
+    .select("id, name, name_da, name_en, sort_order, is_active, created_at")
     .single();
 
   if (error) throw error;
@@ -148,7 +155,7 @@ export async function deleteCategory(id: string): Promise<Category> {
     .from("categories")
     .update({ is_active: false })
     .eq("id", categoryId)
-    .select("id, name, name_da, name_en, is_active, created_at")
+    .select("id, name, name_da, name_en, sort_order, is_active, created_at")
     .single();
 
   if (error) throw error;

@@ -20,17 +20,27 @@ import {
 } from "@/components/admin/ui";
 import type { Category } from "@/types/menu";
 
+function sortCategories(list: Category[]) {
+  return [...list].sort((a, b) => {
+    const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (orderDiff !== 0) return orderDiff;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nameEn, setNameEn] = useState("");
   const [nameDa, setNameDa] = useState("");
+  const [sortOrder, setSortOrder] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNameEn, setEditNameEn] = useState("");
   const [editNameDa, setEditNameDa] = useState("");
+  const [editSortOrder, setEditSortOrder] = useState(0);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -38,7 +48,7 @@ export default function CategoriesPage() {
     setLoading(true);
     setError(null);
     apiGet<Category[]>(API.categories)
-      .then(setCategories)
+      .then((list) => setCategories(sortCategories(list)))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -51,12 +61,12 @@ export default function CategoriesPage() {
       const created = await apiPost<Category>(API.categories, {
         name_en: nameEn,
         name_da: nameDa,
+        sort_order: sortOrder,
       });
-      setCategories((prev) =>
-        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
-      );
+      setCategories((prev) => sortCategories([...prev, created]));
       setNameEn("");
       setNameDa("");
+      setSortOrder(0);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to add category");
     } finally {
@@ -68,6 +78,7 @@ export default function CategoriesPage() {
     setEditingId(category.id);
     setEditNameEn(category.name_en ?? category.name ?? "");
     setEditNameDa(category.name_da ?? category.name ?? "");
+    setEditSortOrder(category.sort_order ?? 0);
     setFormError(null);
   }
 
@@ -78,11 +89,10 @@ export default function CategoriesPage() {
       const updated = await apiPatch<Category>(`${API.categories}/${id}`, {
         name_en: editNameEn,
         name_da: editNameDa,
+        sort_order: editSortOrder,
       });
       setCategories((prev) =>
-        prev
-          .map((c) => (c.id === id ? updated : c))
-          .sort((a, b) => a.name.localeCompare(b.name))
+        sortCategories(prev.map((c) => (c.id === id ? updated : c)))
       );
       setEditingId(null);
     } catch (err) {
@@ -111,11 +121,14 @@ export default function CategoriesPage() {
     <AdminShell>
       <PageHeader
         title="Categories"
-        description="Menu categories shown in the app filter."
+        description="Menu categories shown in the app filter. Lower sort order appears first."
       />
 
       <Card className="mb-6 p-5">
-        <form onSubmit={handleCreate} className="grid gap-4 sm:grid-cols-3">
+        <form
+          onSubmit={handleCreate}
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
           <div>
             <label className={labelClass}>Name (English)</label>
             <input
@@ -132,6 +145,15 @@ export default function CategoriesPage() {
               value={nameDa}
               onChange={(e) => setNameDa(e.target.value)}
               placeholder="e.g. Kaffe"
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Sort order</label>
+            <input
+              type="number"
+              className={inputClass}
+              value={sortOrder}
+              onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
             />
           </div>
           <div className="flex items-end">
@@ -161,6 +183,10 @@ export default function CategoriesPage() {
         <Card className="border-red-200 bg-red-50/50 p-8 text-center">
           <p className="font-medium text-red-800">Failed to load categories</p>
           <p className="mt-1 text-sm text-red-600">{error}</p>
+          <p className="mt-3 text-xs text-red-500">
+            If this is new, run supabase/migration-category-sort-order.sql in
+            Supabase.
+          </p>
         </Card>
       )}
 
@@ -181,7 +207,7 @@ export default function CategoriesPage() {
               return (
                 <li key={category.id} className="p-4">
                   {isEditing ? (
-                    <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                    <div className="grid gap-3 sm:grid-cols-[1fr_1fr_100px_auto]">
                       <div>
                         <label className={labelClass}>English</label>
                         <input
@@ -198,6 +224,17 @@ export default function CategoriesPage() {
                           value={editNameDa}
                           onChange={(e) => setEditNameDa(e.target.value)}
                           placeholder="e.g. Kaffe"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Sort</label>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          value={editSortOrder}
+                          onChange={(e) =>
+                            setEditSortOrder(Number(e.target.value) || 0)
+                          }
                         />
                       </div>
                       <div className="flex items-end gap-2">
@@ -220,16 +257,21 @@ export default function CategoriesPage() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-zinc-900">
-                          {category.name_en || category.name}
-                        </p>
-                        {category.name_da &&
-                        category.name_da !== category.name_en ? (
-                          <p className="text-sm text-zinc-500">
-                            {category.name_da}
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-md bg-zinc-100 px-2 text-xs font-semibold text-zinc-600">
+                          {category.sort_order ?? 0}
+                        </span>
+                        <div>
+                          <p className="font-medium text-zinc-900">
+                            {category.name_en || category.name}
                           </p>
-                        ) : null}
+                          {category.name_da &&
+                          category.name_da !== category.name_en ? (
+                            <p className="text-sm text-zinc-500">
+                              {category.name_da}
+                            </p>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="flex gap-1">
                         <button

@@ -5,6 +5,7 @@ export interface Category {
   name: string;
   name_da?: string | null;
   name_en?: string | null;
+  sort_order: number;
   is_active: boolean;
   created_at: string;
 }
