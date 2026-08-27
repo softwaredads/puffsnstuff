@@ -58,7 +58,9 @@ export default function StampCardPage() {
           <p className="font-medium text-red-800">Failed to load stamp card</p>
           <p className="mt-1 text-sm text-red-600">{error}</p>
           <p className="mt-3 text-xs text-red-500">
-            Run supabase/migration-stamp-card.sql in Supabase SQL Editor.
+            Run supabase/migration-stamp-card.sql (and
+            migration-stamp-reward-category.sql if needed) in Supabase SQL
+            Editor.
           </p>
         </Card>
       )}
@@ -70,7 +72,10 @@ export default function StampCardPage() {
             <span className="text-sm font-medium text-zinc-900">{active.name}</span>
             <span className="text-sm text-zinc-500">
               · {active.stamps_required} stamps · Stamp on {qualifySummary(active)} ·
-              Free {active.reward_product?.name ?? "product"}
+              Free{" "}
+              {active.reward_category?.name
+                ? `any from ${active.reward_category.name}`
+                : (active.reward_product?.name ?? "product")}
             </span>
           </div>
         </Card>

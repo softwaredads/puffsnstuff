@@ -10,11 +10,13 @@ const PROGRAM_SELECT = `
   qualify_category_id,
   qualify_product_id,
   reward_product_id,
+  reward_category_id,
   created_at,
   updated_at,
   qualify_category:categories!stamp_programs_qualify_category_id_fkey ( id, name ),
   qualify_product:products!stamp_programs_qualify_product_id_fkey ( id, name ),
-  reward_product:products!stamp_programs_reward_product_id_fkey ( id, name )
+  reward_product:products!stamp_programs_reward_product_id_fkey ( id, name ),
+  reward_category:categories!stamp_programs_reward_category_id_fkey ( id, name )
 `;
 
 function normalizeProgram(row: Record<string, unknown>): StampProgram {
@@ -31,12 +33,14 @@ function normalizeProgram(row: Record<string, unknown>): StampProgram {
     qualify_type: row.qualify_type as StampProgram["qualify_type"],
     qualify_category_id: (row.qualify_category_id as string | null) ?? null,
     qualify_product_id: (row.qualify_product_id as string | null) ?? null,
-    reward_product_id: row.reward_product_id as string,
+    reward_product_id: (row.reward_product_id as string | null) ?? null,
+    reward_category_id: (row.reward_category_id as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     qualify_category: pick(row.qualify_category) ?? null,
     qualify_product: pick(row.qualify_product) ?? null,
     reward_product: pick(row.reward_product) ?? null,
+    reward_category: pick(row.reward_category) ?? null,
   };
 }
 
@@ -48,8 +52,10 @@ function validateDraft(draft: StampProgramDraft): StampProgramDraft {
     throw new Error("Stamps required must be between 1 and 20");
   }
 
-  if (!draft.reward_product_id) {
-    throw new Error("Select the free product customers earn");
+  const hasProduct = Boolean(draft.reward_product_id);
+  const hasCategory = Boolean(draft.reward_category_id);
+  if (hasProduct === hasCategory) {
+    throw new Error("Select either a free product or a reward category");
   }
 
   if (draft.qualify_type === "category" && !draft.qualify_category_id) {
@@ -67,6 +73,8 @@ function validateDraft(draft: StampProgramDraft): StampProgramDraft {
       draft.qualify_type === "category" ? draft.qualify_category_id : null,
     qualify_product_id:
       draft.qualify_type === "product" ? draft.qualify_product_id : null,
+    reward_product_id: hasProduct ? draft.reward_product_id : null,
+    reward_category_id: hasCategory ? draft.reward_category_id : null,
   };
 }
 
@@ -116,6 +124,19 @@ async function deactivateOtherPrograms(
   if (error) throw error;
 }
 
+function toRow(valid: StampProgramDraft) {
+  return {
+    name: valid.name,
+    is_active: valid.is_active,
+    stamps_required: valid.stamps_required,
+    qualify_type: valid.qualify_type,
+    qualify_category_id: valid.qualify_category_id,
+    qualify_product_id: valid.qualify_product_id,
+    reward_product_id: valid.reward_product_id,
+    reward_category_id: valid.reward_category_id,
+  };
+}
+
 export async function createStampProgram(
   draft: StampProgramDraft
 ): Promise<StampProgram> {
@@ -130,15 +151,7 @@ export async function createStampProgram(
 
   const { data, error } = await supabase
     .from("stamp_programs")
-    .insert({
-      name: valid.name,
-      is_active: valid.is_active,
-      stamps_required: valid.stamps_required,
-      qualify_type: valid.qualify_type,
-      qualify_category_id: valid.qualify_category_id,
-      qualify_product_id: valid.qualify_product_id,
-      reward_product_id: valid.reward_product_id,
-    })
+    .insert(toRow(valid))
     .select(PROGRAM_SELECT)
     .single();
 
@@ -167,7 +180,14 @@ export async function updateStampProgram(
       draft.qualify_product_id !== undefined
         ? draft.qualify_product_id
         : existing.qualify_product_id,
-    reward_product_id: draft.reward_product_id ?? existing.reward_product_id,
+    reward_product_id:
+      draft.reward_product_id !== undefined
+        ? draft.reward_product_id
+        : existing.reward_product_id,
+    reward_category_id:
+      draft.reward_category_id !== undefined
+        ? draft.reward_category_id
+        : existing.reward_category_id,
   };
 
   const valid = validateDraft(merged);
@@ -178,15 +198,7 @@ export async function updateStampProgram(
 
   const { data, error } = await supabase
     .from("stamp_programs")
-    .update({
-      name: valid.name,
-      is_active: valid.is_active,
-      stamps_required: valid.stamps_required,
-      qualify_type: valid.qualify_type,
-      qualify_category_id: valid.qualify_category_id,
-      qualify_product_id: valid.qualify_product_id,
-      reward_product_id: valid.reward_product_id,
-    })
+    .update(toRow(valid))
     .eq("id", id)
     .select(PROGRAM_SELECT)
     .single();

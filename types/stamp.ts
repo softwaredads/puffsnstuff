@@ -8,12 +8,14 @@ export interface StampProgram {
   qualify_type: StampQualifyType;
   qualify_category_id: string | null;
   qualify_product_id: string | null;
-  reward_product_id: string;
+  reward_product_id: string | null;
+  reward_category_id: string | null;
   created_at: string;
   updated_at: string;
   qualify_category?: { id: string; name: string } | null;
   qualify_product?: { id: string; name: string } | null;
   reward_product?: { id: string; name: string } | null;
+  reward_category?: { id: string; name: string } | null;
 }
 
 export interface StampProgramDraft {
@@ -23,5 +25,6 @@ export interface StampProgramDraft {
   qualify_type: StampQualifyType;
   qualify_category_id: string | null;
   qualify_product_id: string | null;
-  reward_product_id: string;
+  reward_product_id: string | null;
+  reward_category_id: string | null;
 }

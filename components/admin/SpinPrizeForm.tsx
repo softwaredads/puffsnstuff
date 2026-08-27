@@ -380,7 +380,7 @@ export default function SpinPrizeForm({ prizeId }: { prizeId?: string }) {
                       <option value="free_product">Free product</option>
                       <option value="free_option">Free topping / option</option>
                       <option value="credit">Fixed amount off (kr)</option>
-                      <option value="percent_off">Percentage off</option>
+                      <option value="percent_off">Percentage off / Free category or product</option>
                     </select>
                   </div>
 
@@ -522,20 +522,45 @@ export default function SpinPrizeForm({ prizeId }: { prizeId?: string }) {
                     <>
                       <div>
                         <label className={labelClass}>Discount percent (1–100) *</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          className={inputClass}
-                          value={draft.percent_value ?? ""}
-                          onChange={(e) =>
-                            setDraft((p) => ({
-                              ...p,
-                              percent_value: Number(e.target.value) || null,
-                            }))
-                          }
-                          required
-                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            className={`${inputClass} min-w-0 flex-1`}
+                            value={draft.percent_value ?? ""}
+                            onChange={(e) =>
+                              setDraft((p) => ({
+                                ...p,
+                                percent_value: Number(e.target.value) || null,
+                              }))
+                            }
+                            required
+                          />
+                          <button
+                            type="button"
+                            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                              draft.percent_value === 100
+                                ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30 hover:bg-emerald-700"
+                                : "border border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                            }`}
+                            onClick={() =>
+                              setDraft((p) => ({
+                                ...p,
+                                percent_value:
+                                  p.percent_value === 100 ? 25 : 100,
+                              }))
+                            }
+                          >
+                            {draft.percent_value === 100
+                              ? "✓ Free (100%)"
+                              : "Make free (100%)"}
+                          </button>
+                        </div>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Sets discount to 100% so the selected product or
+                          category is free.
+                        </p>
                       </div>
                       <div>
                         <label className={labelClass}>Apply to *</label>

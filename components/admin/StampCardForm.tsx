@@ -21,8 +21,22 @@ const defaultDraft = (): StampProgramDraft => ({
   qualify_type: "overall",
   qualify_category_id: null,
   qualify_product_id: null,
-  reward_product_id: "",
+  reward_product_id: null,
+  reward_category_id: null,
 });
+
+function draftFromProgram(program: StampProgram): StampProgramDraft {
+  return {
+    name: program.name,
+    is_active: program.is_active,
+    stamps_required: program.stamps_required,
+    qualify_type: program.qualify_type,
+    qualify_category_id: program.qualify_category_id,
+    qualify_product_id: program.qualify_product_id,
+    reward_product_id: program.reward_product_id,
+    reward_category_id: program.reward_category_id,
+  };
+}
 
 export default function StampCardForm({
   program,
@@ -32,23 +46,17 @@ export default function StampCardForm({
   onSaved: (program: StampProgram) => void;
 }) {
   const [draft, setDraft] = useState<StampProgramDraft>(
-    program
-      ? {
-          name: program.name,
-          is_active: program.is_active,
-          stamps_required: program.stamps_required,
-          qualify_type: program.qualify_type,
-          qualify_category_id: program.qualify_category_id,
-          qualify_product_id: program.qualify_product_id,
-          reward_product_id: program.reward_product_id,
-        }
-      : defaultDraft()
+    program ? draftFromProgram(program) : defaultDraft()
   );
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const rewardMode: "product" | "category" = draft.reward_category_id
+    ? "category"
+    : "product";
 
   useEffect(() => {
     Promise.all([
@@ -65,15 +73,7 @@ export default function StampCardForm({
 
   useEffect(() => {
     if (program) {
-      setDraft({
-        name: program.name,
-        is_active: program.is_active,
-        stamps_required: program.stamps_required,
-        qualify_type: program.qualify_type,
-        qualify_category_id: program.qualify_category_id,
-        qualify_product_id: program.qualify_product_id,
-        reward_product_id: program.reward_product_id,
-      });
+      setDraft(draftFromProgram(program));
     }
   }, [program]);
 
@@ -105,7 +105,8 @@ export default function StampCardForm({
       <Section title="Stamp card program">
         <p className="mb-4 text-sm text-zinc-500">
           Customers earn one stamp per qualifying completed order. When the card
-          is full, they receive a free product gift in Wins — same as spin prizes.
+          is full, they receive a free gift in Wins — a fixed product, or any
+          one product from a category.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -207,22 +208,80 @@ export default function StampCardForm({
         )}
 
         <div className="mt-4">
-          <label className={labelClass}>Free reward product</label>
+          <label className={labelClass}>Free reward</label>
           <select
             className={selectClass}
-            value={draft.reward_product_id}
-            onChange={(e) =>
-              setDraft({ ...draft, reward_product_id: e.target.value })
-            }
+            value={rewardMode}
+            onChange={(e) => {
+              const mode = e.target.value as "product" | "category";
+              if (mode === "product") {
+                setDraft({
+                  ...draft,
+                  reward_product_id: draft.reward_product_id ?? "",
+                  reward_category_id: null,
+                });
+              } else {
+                setDraft({
+                  ...draft,
+                  reward_product_id: null,
+                  reward_category_id: draft.reward_category_id ?? "",
+                });
+              }
+            }}
           >
-            <option value="">Select free product…</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            <option value="product">Specific free product</option>
+            <option value="category">Any product from a category</option>
           </select>
         </div>
+
+        {rewardMode === "product" ? (
+          <div className="mt-4">
+            <label className={labelClass}>Free reward product</label>
+            <select
+              className={selectClass}
+              value={draft.reward_product_id ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  reward_product_id: e.target.value || null,
+                  reward_category_id: null,
+                })
+              }
+            >
+              <option value="">Select free product…</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <label className={labelClass}>Reward category</label>
+            <p className="mb-2 text-xs text-zinc-500">
+              Customer picks any one product from this category when redeeming.
+            </p>
+            <select
+              className={selectClass}
+              value={draft.reward_category_id ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  reward_category_id: e.target.value || null,
+                  reward_product_id: null,
+                })
+              }
+            >
+              <option value="">Select category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <label className="mt-4 flex items-center gap-2 text-sm text-zinc-700">
           <input
