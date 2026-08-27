@@ -9,6 +9,7 @@ import {
   apiPost,
 } from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { defaultWeeklyHours } from "@/lib/pickup-locations";
 import {
   btnDanger,
   btnGhost,
@@ -19,12 +20,94 @@ import {
   labelClass,
   selectClass,
 } from "@/components/admin/ui";
-import type { PickupLocation } from "@/types/pickup-locations";
+import type { DayHours, PickupLocation } from "@/types/pickup-locations";
 
 const INTERVAL_OPTIONS = [10, 15, 20, 30, 45, 60];
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function timeValue(value: string | undefined): string {
   return (value ?? "10:00").slice(0, 5);
+}
+
+function HoursGrid({
+  hours,
+  onChange,
+}: {
+  hours: DayHours[];
+  onChange: (next: DayHours[]) => void;
+}) {
+  const updateDay = (weekday: number, patch: Partial<DayHours>) => {
+    onChange(
+      hours.map((day) =>
+        day.weekday === weekday ? { ...day, ...patch } : day
+      )
+    );
+  };
+
+  return (
+    <div className="space-y-2 sm:col-span-2">
+      <label className={labelClass}>
+        Weekly hours{" "}
+        <span className="font-normal text-zinc-400">
+          (close ≤ open = overnight / next day)
+        </span>
+      </label>
+      <div className="overflow-hidden rounded-lg border border-zinc-200">
+        {hours.map((day) => (
+          <div
+            key={day.weekday}
+            className="grid grid-cols-[52px_1fr_1fr_auto] items-center gap-2 border-b border-zinc-100 px-3 py-2 last:border-b-0"
+          >
+            <span className="text-sm font-medium text-zinc-700">
+              {DAY_LABELS[day.weekday]}
+            </span>
+            <input
+              type="time"
+              className={inputClass}
+              value={timeValue(day.open_time)}
+              disabled={day.is_closed}
+              onChange={(e) =>
+                updateDay(day.weekday, { open_time: e.target.value })
+              }
+            />
+            <input
+              type="time"
+              className={inputClass}
+              value={timeValue(day.close_time)}
+              disabled={day.is_closed}
+              onChange={(e) =>
+                updateDay(day.weekday, { close_time: e.target.value })
+              }
+            />
+            <label className="flex items-center gap-1.5 text-xs text-zinc-600">
+              <input
+                type="checkbox"
+                checked={day.is_closed}
+                onChange={(e) =>
+                  updateDay(day.weekday, { is_closed: e.target.checked })
+                }
+              />
+              Closed
+            </label>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function hoursSummary(loc: PickupLocation): string {
+  const openDays = (loc.weekly_hours ?? []).filter((d) => !d.is_closed);
+  if (openDays.length === 0) return "Closed all week";
+  const first = openDays[0];
+  const same = openDays.every(
+    (d) =>
+      d.open_time === first.open_time && d.close_time === first.close_time
+  );
+  if (same && openDays.length === 7) {
+    return `${first.open_time.slice(0, 5)}–${first.close_time.slice(0, 5)} daily`;
+  }
+  return `${openDays.length} open day${openDays.length === 1 ? "" : "s"}`;
 }
 
 export default function PickupLocationsPage() {
@@ -33,8 +116,7 @@ export default function PickupLocationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [openTime, setOpenTime] = useState("10:00");
-  const [closeTime, setCloseTime] = useState("21:00");
+  const [hours, setHours] = useState<DayHours[]>(() => defaultWeeklyHours());
   const [interval, setInterval] = useState(15);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -42,8 +124,9 @@ export default function PickupLocationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editAddress, setEditAddress] = useState("");
-  const [editOpenTime, setEditOpenTime] = useState("10:00");
-  const [editCloseTime, setEditCloseTime] = useState("21:00");
+  const [editHours, setEditHours] = useState<DayHours[]>(() =>
+    defaultWeeklyHours()
+  );
   const [editInterval, setEditInterval] = useState(15);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -65,15 +148,15 @@ export default function PickupLocationsPage() {
       const created = await apiPost<PickupLocation>(API.pickupLocations, {
         name,
         address,
-        open_time: openTime,
-        close_time: closeTime,
+        open_time: hours.find((d) => !d.is_closed)?.open_time ?? "10:00",
+        close_time: hours.find((d) => !d.is_closed)?.close_time ?? "21:00",
         slot_interval_minutes: interval,
+        weekly_hours: hours,
       });
       setLocations((prev) => [...prev, created]);
       setName("");
       setAddress("");
-      setOpenTime("10:00");
-      setCloseTime("21:00");
+      setHours(defaultWeeklyHours());
       setInterval(15);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to add location");
@@ -86,8 +169,14 @@ export default function PickupLocationsPage() {
     setEditingId(loc.id);
     setEditName(loc.name);
     setEditAddress(loc.address);
-    setEditOpenTime(timeValue(loc.open_time));
-    setEditCloseTime(timeValue(loc.close_time));
+    setEditHours(
+      loc.weekly_hours?.length
+        ? loc.weekly_hours
+        : defaultWeeklyHours(
+            timeValue(loc.open_time),
+            timeValue(loc.close_time)
+          )
+    );
     setEditInterval(loc.slot_interval_minutes || 15);
     setFormError(null);
   }
@@ -101,9 +190,12 @@ export default function PickupLocationsPage() {
         {
           name: editName,
           address: editAddress,
-          open_time: editOpenTime,
-          close_time: editCloseTime,
+          open_time:
+            editHours.find((d) => !d.is_closed)?.open_time ?? "10:00",
+          close_time:
+            editHours.find((d) => !d.is_closed)?.close_time ?? "21:00",
           slot_interval_minutes: editInterval,
+          weekly_hours: editHours,
         }
       );
       setLocations((prev) => prev.map((loc) => (loc.id === id ? updated : loc)));
@@ -134,7 +226,7 @@ export default function PickupLocationsPage() {
     <AdminShell>
       <PageHeader
         title="Pickup Locations"
-        description="Addresses customers can choose at checkout."
+        description="Addresses and weekly opening hours for checkout."
       />
 
       <Card className="mb-6 p-5">
@@ -160,26 +252,6 @@ export default function PickupLocationsPage() {
             />
           </div>
           <div>
-            <label className={labelClass}>Open time</label>
-            <input
-              type="time"
-              className={inputClass}
-              value={openTime}
-              onChange={(e) => setOpenTime(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className={labelClass}>Close time</label>
-            <input
-              type="time"
-              className={inputClass}
-              value={closeTime}
-              onChange={(e) => setCloseTime(e.target.value)}
-              required
-            />
-          </div>
-          <div>
             <label className={labelClass}>Slot interval (minutes)</label>
             <select
               className={selectClass}
@@ -193,6 +265,7 @@ export default function PickupLocationsPage() {
               ))}
             </select>
           </div>
+          <HoursGrid hours={hours} onChange={setHours} />
           <div className="sm:col-span-2 flex items-center gap-3">
             <button type="submit" className={btnPrimary} disabled={submitting}>
               {submitting ? "Adding…" : "Add location"}
@@ -215,7 +288,7 @@ export default function PickupLocationsPage() {
           <p className="font-medium text-red-800">Failed to load locations</p>
           <p className="mt-1 text-sm text-red-600">{error}</p>
           <p className="mt-2 text-xs text-red-500">
-            Run supabase/migration-pickup-locations.sql if you haven&apos;t yet.
+            Run migration-pickup-weekly-hours.sql in Supabase if needed.
           </p>
         </Card>
       )}
@@ -251,24 +324,6 @@ export default function PickupLocationsPage() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Open time</label>
-                      <input
-                        type="time"
-                        className={inputClass}
-                        value={editOpenTime}
-                        onChange={(e) => setEditOpenTime(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Close time</label>
-                      <input
-                        type="time"
-                        className={inputClass}
-                        value={editCloseTime}
-                        onChange={(e) => setEditCloseTime(e.target.value)}
-                      />
-                    </div>
-                    <div>
                       <label className={labelClass}>Slot interval</label>
                       <select
                         className={selectClass}
@@ -282,7 +337,8 @@ export default function PickupLocationsPage() {
                         ))}
                       </select>
                     </div>
-                    <div className="flex items-end gap-2">
+                    <HoursGrid hours={editHours} onChange={setEditHours} />
+                    <div className="flex items-end gap-2 sm:col-span-2">
                       <button
                         type="button"
                         className={btnPrimary}
@@ -306,8 +362,8 @@ export default function PickupLocationsPage() {
                       <p className="font-medium text-zinc-900">{loc.name}</p>
                       <p className="text-sm text-zinc-600">{loc.address}</p>
                       <p className="mt-1 text-xs text-zinc-500">
-                        {loc.open_time?.slice(0, 5)}–{loc.close_time?.slice(0, 5)}{" "}
-                        · {loc.slot_interval_minutes} min slots
+                        {hoursSummary(loc)} · {loc.slot_interval_minutes} min
+                        slots
                       </p>
                     </div>
                     <div className="flex gap-1">
